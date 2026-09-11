@@ -1,0 +1,145 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: ''  # Add your Slack webhook URL
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# The root route with all parameters, which are inherited by the child
+# routes if they are not overwritten.
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+  routes:
+    # Model Performance Alerts
+    - match:
+        severity: critical
+        type: ml
+      receiver: 'ml-critical'
+      group_wait: 10s
+      repeat_interval: 1h
+
+    - match:
+        severity: warning
+        type: ml
+      receiver: 'ml-warnings'
+      group_wait: 1m
+      repeat_interval: 4h
+
+    # API Health Alerts
+    - match:
+        severity: critical
+        service: api
+      receiver: 'api-critical'
+      group_wait: 10s
+      repeat_interval: 30m
+
+    - match:
+        severity: warning
+        service: api
+      receiver: 'api-warnings'
+      group_wait: 5m
+      repeat_interval: 2h
+
+    # Database Alerts
+    - match:
+        severity: critical
+        service: database
+      receiver: 'database-critical'
+      group_wait: 10s
+      repeat_interval: 30m
+
+    # Data Quality Alerts
+    - match:
+        type: data_quality
+      receiver: 'data-quality'
+      group_wait: 1m
+      repeat_interval: 6h
+
+    # Default
+    - match_re:
+        severity: '.*'
+      receiver: 'default'
+
+# Inhibition rules allow to mute a set of alerts given that another alert is firing.
+inhibit_rules:
+  # Mute warning alerts if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+
+  # Mute info alerts if warning or critical is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'service']
+
+# Receivers
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+
+  - name: 'ml-critical'
+    slack_configs:
+      - channel: '#ai-critical-alerts'
+        title: '🔴 ML Model Critical Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+        send_resolved: true
+        color: 'danger'
+    # Uncomment to enable email for critical ML alerts
+    # email_configs:
+    #   - to: 'ml-team@company.com'
+    #     from: 'alertmanager@company.com'
+    #     smarthost: 'smtp.company.com:587'
+    #     auth_username: 'alertmanager@company.com'
+    #     auth_password: 'password'
+
+  - name: 'ml-warnings'
+    slack_configs:
+      - channel: '#ai-warnings'
+        title: '⚠️ ML Model Warning'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+        send_resolved: true
+        color: 'warning'
+
+  - name: 'api-critical'
+    slack_configs:
+      - channel: '#api-critical-alerts'
+        title: '🔴 API Critical Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ .Annotations.action }}\n{{ end }}'
+        send_resolved: true
+        color: 'danger'
+
+  - name: 'api-warnings'
+    slack_configs:
+      - channel: '#api-warnings'
+        title: '⚠️ API Warning'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+        send_resolved: true
+        color: 'warning'
+
+  - name: 'database-critical'
+    slack_configs:
+      - channel: '#database-alerts'
+        title: '🔴 Database Critical Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ .Annotations.action }}\n{{ end }}'
+        send_resolved: true
+        color: 'danger'
+
+  - name: 'data-quality'
+    slack_configs:
+      - channel: '#data-quality'
+        title: '📊 Data Quality Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+        send_resolved: true
+        color: 'warning'
+
+# Notification templates
+templates: []

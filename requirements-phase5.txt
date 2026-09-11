@@ -1,0 +1,28 @@
+Flask==2.3.3
+Flask-CORS==6.0.5
+psycopg2-binary==2.9.12
+pandas==3.0.5
+numpy==2.5.3
+scikit-learn==1.9.0
+python-dotenv==1.2.3
+requests==2.31.0
+
+# ==================== PHASE 6: PLATFORM UPGRADES ====================
+Flask-JWT-Extended==4.7.1
+bcrypt==4.2.1
+redis==5.2.1
+Flask-Limiter==3.9.2
+flasgger==0.9.7.1
+APScheduler==3.10.4
+Flask-SocketIO==5.4.1
+python-socketio==5.11.4
+simple-websocket==1.1.0
+reportlab==4.2.5
+prometheus-flask-exporter==0.23.1
+
+# ==================== PHASE 7: SECURITY, INTEGRATIONS & INSIGHTS ====================
+pyotp==2.9.0
+qrcode==7.4.2
+ariadne==0.23.0
+openpyxl==3.1.5
+

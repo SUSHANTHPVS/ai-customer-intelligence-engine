@@ -1,0 +1,93 @@
+# Prometheus Configuration
+# ========================
+# This configuration enables Prometheus to scrape metrics from the Flask API
+# and store them for querying and alerting.
+
+global:
+  scrape_interval: 15s        # How often to scrape targets by default
+  evaluation_interval: 15s    # How often to evaluate alert rules
+  external_labels:
+    monitor: 'ai-intelligence-engine'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'localhost:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - '/etc/prometheus/alerting_rules.yml'
+  - '/etc/prometheus/recording_rules.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Monitor Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          group: 'monitoring'
+
+  # Monitor Flask API metrics endpoint
+  - job_name: 'flask-api'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['localhost:5000']
+        labels:
+          service: 'ai-intelligence-api'
+          version: 'v1'
+    
+    # Add authentication if needed
+    # bearer_token: 'your_token_here'
+    
+    # Add custom labels to all metrics from this job
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-server'
+
+  # Monitor Grafana metrics (if available)
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['localhost:3000']
+        labels:
+          service: 'grafana'
+    
+    # Grafana doesn't expose metrics by default, but can be configured
+    # This is optional
+
+  # Monitor Node Exporter (system metrics) - optional
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          group: 'system'
+    
+    # Path to metrics (only needed if Node Exporter is running on different path)
+    metrics_path: '/metrics'
+
+  # Monitor PostgreSQL database - optional
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+        labels:
+          service: 'postgresql'
+          database: 'customer_intelligence'
+
+# Service Discovery - optional
+# Uncomment if using Docker Compose or Kubernetes
+# service_discovery_configs:
+#   - docker_sd_configs:
+#       - host: unix:///var/run/docker.sock
+#
+#   - kubernetes_sd_configs:
+#       - api_server: 'https://localhost:6443'
+#         role: 'pod'
+#         tls_config:
+#           ca_file: '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+#         bearer_token_file: '/var/run/secrets/kubernetes.io/serviceaccount/token'

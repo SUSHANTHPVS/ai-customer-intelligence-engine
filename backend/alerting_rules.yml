@@ -1,0 +1,221 @@
+# Prometheus Alert Rules
+# ======================
+# Alert rules for model monitoring, API health, and data quality
+
+groups:
+  - name: ml_model_alerts
+    interval: 30s
+    rules:
+      # ========== Accuracy Degradation ==========
+      - alert: ChurnModelAccuracyDegraded
+        expr: model_accuracy{model_name="churn_model"} < 0.80
+        for: 5m
+        labels:
+          severity: warning
+          model: churn
+        annotations:
+          summary: "Churn model accuracy degraded"
+          description: "Churn model accuracy is {{ $value | humanizePercentage }} (threshold: 80%)"
+          runbook_url: "https://wiki.example.com/runbooks/model-accuracy-degraded"
+
+      - alert: RevenueModelAccuracyDegraded
+        expr: model_accuracy{model_name="revenue_model"} < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          model: revenue
+        annotations:
+          summary: "Revenue model accuracy degraded"
+          description: "Revenue model accuracy is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      - alert: EngagementModelAccuracyDegraded
+        expr: model_accuracy{model_name="engagement_model"} < 0.85
+        for: 5m
+        labels:
+          severity: warning
+          model: engagement
+        annotations:
+          summary: "Engagement model accuracy degraded"
+          description: "Engagement model accuracy is {{ $value | humanizePercentage }} (threshold: 85%)"
+
+      # ========== Data Drift Detection ==========
+      - alert: DataDriftDetected
+        expr: data_drift_detected > 0
+        for: 1m
+        labels:
+          severity: critical
+          type: data_quality
+        annotations:
+          summary: "Data drift detected for {{ $labels.model_name }}"
+          description: "Data drift detected for model {{ $labels.model_name }} with score {{ $value }}"
+          action: "Review feature distributions and consider retraining"
+
+      - alert: HighDataDriftScore
+        expr: data_drift_score{model_name="churn_model"} > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          type: data_quality
+        annotations:
+          summary: "High data drift score for {{ $labels.model_name }}"
+          description: "Drift score is {{ $value }} (threshold: 0.15)"
+
+      # ========== Prediction Error Rate ==========
+      - alert: HighPredictionErrorRate
+        expr: (rate(model_prediction_errors_total[5m]) / rate(model_predictions_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High prediction error rate for {{ $labels.model_name }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          action: "Check model logs and restart API if necessary"
+
+      # ========== Model Prediction Latency ==========
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High prediction latency for {{ $labels.model_name }}"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 500ms)"
+          action: "Check system resources and database performance"
+
+      - alert: CriticalPredictionLatency
+        expr: histogram_quantile(0.99, rate(model_prediction_latency_seconds_bucket[5m])) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical prediction latency for {{ $labels.model_name }}"
+          description: "P99 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+          action: "Immediate intervention required"
+
+  - name: api_health_alerts
+    interval: 30s
+    rules:
+      # ========== API Request Metrics ==========
+      - alert: HighAPIErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "High API error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          action: "Check API server logs immediately"
+
+      - alert: APIRequestLatencyHigh
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High API request latency"
+          description: "P95 request latency is {{ $value | humanizeDuration }} (threshold: 1s)"
+          action: "Review slow endpoints and optimize"
+
+      - alert: APIServerDown
+        expr: api_server_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API server is down"
+          description: "The AI Intelligence API server is not responding"
+          action: "Restart API server immediately"
+
+      # ========== API Request Volume ==========
+      - alert: UnusuallyLowRequestVolume
+        expr: rate(http_requests_total[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Unusually low API request volume"
+          description: "Request rate is {{ $value | humanize }} req/s"
+          action: "Check if API is receiving traffic normally"
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # ========== Database Connection ==========
+      - alert: DatabaseConnectionErrors
+        expr: rate(database_connection_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database connection errors detected"
+          description: "Error rate is {{ $value | humanize }} errors/s"
+          action: "Check database connectivity and credentials"
+
+      - alert: DatabaseQueryLatencyHigh
+        expr: histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "High database query latency"
+          description: "P95 query latency is {{ $value | humanizeDuration }} (threshold: 1s)"
+          action: "Check database performance and indexes"
+
+  - name: retraining_alerts
+    interval: 5m
+    rules:
+      # ========== Retraining Status ==========
+      - alert: ModelRetrainingNeeded
+        expr: |
+          (model_accuracy < 0.80 and model_name = "churn_model") or
+          (model_accuracy < 0.90 and model_name = "revenue_model") or
+          (model_accuracy < 0.85 and model_name = "engagement_model")
+        for: 30m
+        labels:
+          severity: warning
+          action: retrain
+        annotations:
+          summary: "Model {{ $labels.model_name }} needs retraining"
+          description: "Current accuracy is {{ $value | humanizePercentage }}"
+          action: "Trigger automated retraining workflow"
+
+      - alert: RetrainingInProgress
+        expr: http_requests_in_progress{endpoint="/retrain"} > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Model retraining in progress"
+          description: "Retraining workflow is running"
+
+  - name: predictive_maintenance
+    interval: 1h
+    rules:
+      # ========== Model Performance Trends ==========
+      - alert: ModelAccuracyTrendingDown
+        expr: |
+          (avg_over_time(model_accuracy{model_name="churn_model"}[1h]) - avg_over_time(model_accuracy{model_name="churn_model"}[1d])) < -0.05
+        for: 1h
+        labels:
+          severity: warning
+          trend: negative
+        annotations:
+          summary: "Model {{ $labels.model_name }} accuracy trending down"
+          description: "1-hour average accuracy has dropped compared to 1-day average"
+          action: "Investigate model drift and data quality issues"
+
+      - alert: HighDataVolatility
+        expr: stddev_over_time(model_accuracy[1h]) > 0.1
+        for: 30m
+        labels:
+          severity: warning
+          type: data_quality
+        annotations:
+          summary: "High volatility in model performance"
+          description: "Standard deviation of accuracy is {{ $value | humanizePercentage }}"
+          action: "Review recent data changes and quality checks"

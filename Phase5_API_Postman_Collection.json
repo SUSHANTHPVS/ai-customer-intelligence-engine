@@ -1,0 +1,318 @@
+{
+  "info": {
+    "_postman_id": "phase5-ml-api",
+    "name": "Phase 5: ML API Predictions",
+    "description": "Collection of all Phase 5 ML Model Prediction API endpoints for AI Customer Intelligence Engine",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Check if API server is running and models are loaded"
+          },
+          "response": []
+        },
+        {
+          "name": "Model Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/models/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "models", "status"]
+            },
+            "description": "Get status of all loaded models and scalers"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Predictions",
+      "item": [
+        {
+          "name": "Churn Prediction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/churn",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "churn"]
+            },
+            "description": "Predict churn risk for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Revenue Prediction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/revenue",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "revenue"]
+            },
+            "description": "Predict revenue for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Engagement Prediction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/engagement",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "engagement"]
+            },
+            "description": "Predict engagement score for a customer (0-100)"
+          },
+          "response": []
+        },
+        {
+          "name": "Segmentation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/segment",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "segment"]
+            },
+            "description": "Classify customer into segment (cluster)"
+          },
+          "response": []
+        },
+        {
+          "name": "Batch Prediction (All)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/batch",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "batch"]
+            },
+            "description": "Get all predictions for a customer in one request (churn, revenue, engagement, segment)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Error Testing",
+      "item": [
+        {
+          "name": "Missing Customer ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/churn",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "churn"]
+            },
+            "description": "Test error handling for missing customer_id (should return 400)"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"INVALID_999\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/churn",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "churn"]
+            },
+            "description": "Test error handling for non-existent customer (should return 404)"
+          },
+          "response": []
+        },
+        {
+          "name": "Missing API Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"C000001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predict/churn",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predict", "churn"]
+            },
+            "description": "Test error handling for missing API key (should return 401)"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/invalid-endpoint",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invalid-endpoint"]
+            },
+            "description": "Test error handling for invalid endpoint (should return 404)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "test-key",
+      "type": "string"
+    }
+  ]
+}

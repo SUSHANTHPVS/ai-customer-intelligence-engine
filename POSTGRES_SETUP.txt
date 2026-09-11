@@ -1,0 +1,96 @@
+
+================================================================================
+PHASE 2: PostgreSQL Setup Guide
+================================================================================
+
+CURRENT STATUS: PostgreSQL NOT installed
+
+================================================================================
+INSTALLATION OPTIONS
+================================================================================
+
+OPTION 1: Using Chocolatey (Recommended if installed)
+-------------------------------------------------------
+Command: choco install postgresql
+
+OPTION 2: Using Winget (Windows Package Manager)
+-------------------------------------------------------
+Command: winget install PostgreSQL.PostgreSQL
+
+OPTION 3: Direct Download (Manual Installation)
+-------------------------------------------------------
+1. Go to: https://www.postgresql.org/download/windows/
+2. Download PostgreSQL 14 or 15 (LTS versions recommended)
+3. Run the installer
+4. During installation:
+   - Set a strong password for 'postgres' superuser
+   - Keep default port: 5432
+   - Include pgAdmin (recommended)
+5. Complete the installation and restart your terminal
+
+OPTION 4: Using Docker (If Docker is installed)
+-------------------------------------------------------
+Command: docker run --name customer-intel-db -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:15
+
+================================================================================
+POST-INSTALLATION STEPS
+================================================================================
+
+After PostgreSQL is installed:
+
+1. Verify installation:
+   psql --version
+
+2. Connect to PostgreSQL:
+   psql -U postgres
+
+3. Once connected (psql prompt), run these commands:
+
+   CREATE DATABASE customer_intelligence;
+   \c customer_intelligence
+   \q (to exit)
+
+4. Load the schema from sql/schema.sql:
+   psql -U postgres -d customer_intelligence -f sql/schema.sql
+
+5. Verify tables were created:
+   psql -U postgres -d customer_intelligence -c "\dt"
+
+================================================================================
+ENVIRONMENT CONFIGURATION
+================================================================================
+
+After PostgreSQL is installed, update your .env file:
+
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/customer_intelligence
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=customer_intelligence
+DB_USER=postgres
+DB_PASSWORD=YOUR_PASSWORD
+
+Replace YOUR_PASSWORD with the password you set during PostgreSQL installation.
+
+================================================================================
+PROJECT STRUCTURE - READY FOR DATABASE
+================================================================================
+
+Files prepared for Phase 2:
+  sql/schema.sql - PostgreSQL star schema (8 tables + indexes + materialized view)
+  sql/analytics.sql - Advanced SQL queries for analytics
+  data/raw/customers.csv - 10,000 customer records
+  data/raw/events.csv - 1,000,000+ event records
+  data/raw/transactions.csv - 200,000 transaction records
+  data/raw/support_tickets.csv - 50,000 support ticket records
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Choose an installation option above and install PostgreSQL
+2. Verify installation with: psql --version
+3. Run the setup commands to create the database
+4. Execute: psql -U postgres -d customer_intelligence -f sql/schema.sql
+5. Proceed with data loading
+
+================================================================================

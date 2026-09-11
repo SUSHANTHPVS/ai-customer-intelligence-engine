@@ -1,358 +1,207 @@
-# 🧠 AI-Powered Business Intelligence & Customer Decision Engine
+# 🧠 AI Customer Intelligence Engine
 
-An end-to-end analytics platform that predicts customer churn, quantifies revenue at risk, and provides actionable intervention recommendations.
+A multi-tenant customer analytics platform that turns raw customer data (signups, product usage events, transactions, support tickets) into churn predictions, revenue-at-risk insights, and real-time monitoring — with each user able to upload and analyze their own dataset in complete isolation.
 
-**Transform raw customer behavior into executive decisions.**
-
----
-
-## 🎯 Project Objective
-
-Answer critical business questions:
-- **Which customers are likely to leave?** (Churn Prediction)
-- **Why are they leaving?** (Explainable AI / SHAP)
-- **How much revenue is at risk?** (Revenue-at-Risk Engine)
-- **What should we do about it?** (Intervention Recommendations)
-- **What-if we could reduce churn?** (Scenario Simulation)
-
-**Scale:** Process 1-10M+ customer events with advanced analytics, ML, and BI.
+**Stack:** Flask (Python) · React (Vite) · PostgreSQL · Redis · Socket.IO · scikit-learn · Docker
 
 ---
 
-## 🏗️ Project Architecture
+## 🎯 What It Does
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│  RAW DATA                                                       │
-│  ├─ Customer registrations                                      │
-│  ├─ Feature usage events                                        │
-│  ├─ Payment transactions                                        │
-│  ├─ Support tickets                                             │
-│  └─ Marketing interactions                                      │
-│         │                                                       │
-│         ▼                                                       │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │ DATA PIPELINE                                          │    │
-│  │ ├─ Data Generation (Synthetic)                         │    │
-│  │ ├─ Data Cleaning & Validation                          │    │
-│  │ ├─ ETL to SQL Warehouse                                │    │
-│  │ └─ Feature Engineering                                 │    │
-│  └────────────────────────────────────────────────────────┘    │
-│         │                                                       │
-│         ▼                                                       │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │ SQL DATA WAREHOUSE (PostgreSQL)                        │    │
-│  │ ├─ Fact Tables (events, transactions, support)         │    │
-│  │ ├─ Dimension Tables (customer, product, date)          │    │
-│  │ ├─ Customer 360° dataset                               │    │
-│  │ └─ Pre-aggregated metrics                              │    │
-│  └────────────────────────────────────────────────────────┘    │
-│         │                                                       │
-│    ┌────┴───────┬──────────────┐                               │
-│    ▼            ▼              ▼                               │
-│  ┌──────────┐ ┌───────────┐ ┌──────────────┐                  │
-│  │ ANALYTICS│ │ ML MODELS │ │   REPORTS    │                  │
-│  │          │ │           │ │              │                  │
-│  │ • EDA    │ │ • Churn   │ │ • Cohort     │                  │
-│  │ • Cohort │ │   Pred.   │ │ • Retention  │                  │
-│  │ • RFM    │ │ • Segm.   │ │ • Attribution│                  │
-│  │ • Funnel │ │ • Ranking │ │ • Metrics    │                  │
-│  └──────────┘ └───────────┘ └──────────────┘                  │
-│         │            │              │                          │
-│         └────────────┴──────────────┘                          │
-│                  │                                             │
-│                  ▼                                             │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │ REVENUE-AT-RISK ENGINE                                 │    │
-│  │ ├─ Churn Probability × Predicted LTV                   │    │
-│  │ ├─ Customer Risk Ranking                               │    │
-│  │ └─ Portfolio Risk Assessment                           │    │
-│  └────────────────────────────────────────────────────────┘    │
-│         │                                                       │
-│         ▼                                                       │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │ INTERVENTION RECOMMENDATION ENGINE                     │    │
-│  │ ├─ Rule-based recommendations                          │    │
-│  │ ├─ SHAP-based feature importance                       │    │
-│  │ ├─ Suggested actions & incentives                      │    │
-│  │ └─ Expected ROI per intervention                       │    │
-│  └────────────────────────────────────────────────────────┘    │
-│         │                                                       │
-│    ┌────┴─────────────────────────────┐                       │
-│    ▼                                  ▼                       │
-│  ┌────────────────────────┐  ┌──────────────────────────┐    │
-│  │  INTERACTIVE DASHBOARD │  │  ANALYTICS API (FastAPI)│    │
-│  │  (Power BI / Tableau)  │  │                          │    │
-│  │                        │  │ Serves:                  │    │
-│  │ • Executive Overview   │  │ • Dashboard              │    │
-│  │ • Customer Intel       │  │ • Recommendations        │    │
-│  │ • Churn Analysis       │  │ • Predictions            │    │
-│  │ • Marketing Analytics  │  │ • Explanations           │    │
-│  │ • What-if Simulator    │  │ • Scenarios              │    │
-│  └────────────────────────┘  └──────────────────────────┘    │
-│                                                                 │
-│  DEPLOYED: Render (API) + Vercel (Frontend)                    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- Ingests customer data (either the built-in 10,000-row demo dataset or your own uploaded CSVs)
+- Engineers RFM, behavioral, engagement, revenue, and support features per customer
+- Scores every customer for **churn risk** (rule-based) and lets you **train a real ML model** (RandomForest) per dataset for genuine, held-out accuracy/precision/recall/F1
+- Surfaces automated, plain-English insights generated from the live data
+- Streams risk alerts in real time over WebSockets
+- Exposes everything through a REST + GraphQL API, secured with JWT auth, 2FA, RBAC, and API keys
 
 ---
 
-## 📂 Project Structure
+## ✨ Features
 
-```
-customer-intelligence-engine/
-│
-├── 📊 data/
-│   ├── raw/                      # Raw synthetic data (CSV/Parquet)
-│   ├── processed/                # Cleaned, transformed data
-│   └── README.md
-│
-├── 🗄️ sql/
-│   ├── schema.sql               # Warehouse schema (fact & dimension tables)
-│   ├── transformations.sql      # ETL transformations
-│   ├── cohort_analysis.sql      # Cohort & retention queries
-│   ├── customer_segmentation.sql# RFM, behavioral segmentation
-│   ├── churn_features.sql       # Feature engineering queries
-│   └── README.md
-│
-├── 📓 notebooks/
-│   ├── 01_EDA.ipynb             # Exploratory data analysis
-│   ├── 02_Cohort_Analysis.ipynb # Cohort retention analysis
-│   ├── 03_Segmentation.ipynb    # Customer segmentation
-│   ├── 04_Churn_Model.ipynb     # Model training & comparison
-│   ├── 05_SHAP_Analysis.ipynb   # Model explainability
-│   └── 06_Revenue_Risk.ipynb    # Revenue-at-risk calculations
-│
-├── 🐍 src/
-│   ├── data_generation/         # Synthetic data generation
-│   │   ├── __init__.py
-│   │   ├── generator.py         # Main data generation logic
-│   │   └── config.py            # Data parameters
-│   │
-│   ├── preprocessing/           # Data cleaning & validation
-│   │   ├── __init__.py
-│   │   ├── cleaner.py
-│   │   └── validators.py
-│   │
-│   ├── features/                # Feature engineering
-│   │   ├── __init__.py
-│   │   ├── customer_360.py      # 360° customer dataset
-│   │   ├── behavioral.py        # Behavioral features
-│   │   ├── financial.py         # Financial features
-│   │   └── temporal.py          # Time-based features
-│   │
-│   ├── models/                  # ML models
-│   │   ├── __init__.py
-│   │   ├── churn_model.py       # Churn prediction models
-│   │   ├── segmentation.py      # Clustering models
-│   │   ├── evaluator.py         # Model evaluation utilities
-│   │   └── shap_explainer.py    # SHAP-based explanations
-│   │
-│   ├── recommendations/         # Intervention engine
-│   │   ├── __init__.py
-│   │   ├── rules.py             # Rule-based recommendations
-│   │   ├── engine.py            # Main recommendation engine
-│   │   └── simulator.py         # What-if simulations
-│   │
-│   └── utils/
-│       ├── __init__.py
-│       ├── db.py                # Database utilities
-│       ├── logger.py            # Logging setup
-│       └── config.py            # Global configuration
-│
-├── 🎨 dashboard/
-│   ├── powerbi/                 # Power BI files (.pbix)
-│   ├── tableau/                 # Tableau workbooks
-│   └── README.md
-│
-├── 🌐 api/
-│   ├── main.py                  # FastAPI app entry point
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   ├── predictions.py       # Churn predictions
-│   │   ├── recommendations.py   # Intervention recommendations
-│   │   ├── customer.py          # Customer 360°
-│   │   └── scenarios.py         # What-if simulator
-│   │
-│   ├── models.py                # Pydantic models
-│   ├── config.py                # API configuration
-│   └── requirements.txt
-│
-├── ⚛️ frontend/
-│   ├── src/
-│   │   ├── pages/               # React pages
-│   │   ├── components/          # Reusable components
-│   │   ├── hooks/               # Custom React hooks
-│   │   ├── services/            # API calls
-│   │   ├── context/             # Context providers
-│   │   └── App.jsx
-│   │
-│   ├── public/
-│   ├── package.json
-│   ├── vite.config.js
-│   └── README.md
-│
-├── 🧪 tests/
-│   ├── test_data_generation.py
-│   ├── test_models.py
-│   ├── test_api.py
-│   └── conftest.py
-│
-├── 📚 docs/
-│   ├── ARCHITECTURE.md          # Detailed architecture
-│   ├── DATA_DICTIONARY.md       # Column definitions
-│   ├── QUERIES.md               # Important SQL queries
-│   ├── ROADMAP.md               # Development roadmap
-│   └── DEPLOYMENT.md            # Deployment guide
-│
-├── .env.example                 # Environment variables template
-├── .gitignore
-├── requirements.txt             # Python dependencies
-├── setup.py
-└── LICENSE
-```
+### Analytics
+- Customer segmentation (VIP / Standard / At-Risk / Dormant)
+- Engagement metrics, LTV predictions (actual vs. predicted), churn risk distribution
+- Customer search with full profile drill-down (RFM, behavioral, revenue, support, churn history)
+- Automated Insights — a real-data-driven insight engine (trend deltas, revenue-at-risk, segment/geo/channel/industry breakdowns, per-customer risk callouts); the dashboard shows one fresh insight every refresh
+
+### Machine Learning
+- Real per-dataset model training (`RandomForestClassifier`) with genuine train/test split metrics and feature importances — trained on-demand per dataset via the Datasets page
+- Prediction API (`/api/v1/predict/*`) for churn, revenue, engagement, segment, and batch predictions, secured with admin-issued API keys
+
+### Multi-Tenant Datasets
+- Any authenticated user can upload their own `customers.csv` (+ optional `events.csv`, `transactions.csv`, `support_tickets.csv`)
+- Background processing with per-dataset ID-prefixing for full tenant isolation — no cross-contamination between uploads
+- Automatic feature engineering and churn scoring on upload
+- Data quality report (duplicate IDs, missing emails/names, completeness %) generated per upload
+- Switch your active dataset any time — Analytics, Customers, Live Feed, and Insights all follow
+
+### Real-Time
+- Live Activity Feed over Socket.IO, scoped to your active dataset's room
+- In-app notification bell for high-risk alerts
+- Scheduled background jobs refresh risk snapshots (every minute) and insights (every 5 minutes) per dataset
+
+### Exports
+- CSV (customers, analytics report)
+- Excel (`.xlsx`) with styled headers
+- PDF analytics report
+
+### Auth & Security
+- JWT authentication (access + refresh tokens), bcrypt password hashing
+- Two-Factor Authentication (TOTP, QR-code setup)
+- Role-based access control (admin/user)
+- Admin-managed API keys for external API access
+- Audit log of security-relevant actions
+- Redis-backed rate limiting
+
+### Integrations & Dev Tools
+- GraphQL API with GraphiQL playground (`/graphql`)
+- Webhooks (HMAC-signed) for high-risk alert events
+- Swagger/OpenAPI docs (`/api/docs`)
+- Prometheus metrics (`/metrics`)
+- Admin CSV bulk customer import
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Architecture
 
-### Prerequisites
-- Python 3.10+
-- PostgreSQL 14+
-- Node.js 18+
-- Git
-
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/customer-intelligence-engine.git
-cd customer-intelligence-engine
-
-# Backend setup
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Frontend setup
-cd frontend
-npm install
-
-# Create environment file
-cp .env.example .env
-# Edit .env with your database and API credentials
+```
+┌────────────────────────────────────────────────────────────────┐
+│  React Frontend (Vite, Tailwind, Zustand, Recharts)             │
+│  Analytics · Customers · Live Feed · Model Metrics · Datasets · │
+│  Settings (2FA, API keys, webhooks, audit log)                  │
+└───────────────┬──────────────────────────────────────────────┘
+                 │ REST + GraphQL + WebSocket (JWT-secured)
+┌────────────────▼─────────────────────────────────────────────┐
+│  Flask API (phase5_api_server.py) + blueprints:                │
+│  auth · customers · jobs · export · admin · twofa · webhooks · │
+│  import · graphql · insights · datasets · ml                   │
+│  + APScheduler background jobs + Flask-SocketIO real-time feed │
+└───────┬───────────────────────────────────────┬───────────────┘
+        │                                        │
+┌───────▼────────────┐                  ┌────────▼────────────┐
+│ PostgreSQL          │                  │ Redis                │
+│ customers, events,  │                  │ cache, rate limits,  │
+│ transactions,       │                  │ insight pools,       │
+│ support_tickets,    │                  │ trained model blobs  │
+│ feature_* tables,   │                  │ (pickled), JWT       │
+│ datasets (per-tenant)│                 │ blocklist            │
+└─────────────────────┘                  └──────────────────────┘
 ```
 
-### Phase Workflow
-
-| Phase | Focus | Duration | Status |
-|-------|-------|----------|--------|
-| **Phase 1** | Data Generation & SQL Warehouse | Week 1 | 🔄 In Progress |
-| **Phase 2** | Analytics & Cohort Analysis | Week 2 | ⏳ Pending |
-| **Phase 3** | Customer Segmentation | Week 2-3 | ⏳ Pending |
-| **Phase 4** | Churn Prediction Model | Week 3-4 | ⏳ Pending |
-| **Phase 5** | Revenue-at-Risk & Recommendations | Week 4-5 | ⏳ Pending |
-| **Phase 6** | Dashboard & BI | Week 5-6 | ⏳ Pending |
-| **Phase 7** | FastAPI Backend | Week 6-7 | ⏳ Pending |
-| **Phase 8** | React Frontend | Week 7-8 | ⏳ Pending |
-| **Phase 9** | Testing & Refinement | Week 8-9 | ⏳ Pending |
-| **Phase 10** | Deployment & Documentation | Week 9-10 | ⏳ Pending |
+All services run in Docker Compose: `postgres`, `redis`, `backend`, `frontend`.
 
 ---
 
 ## 💻 Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Data Generation** | Python, Pandas, Faker |
-| **Database** | PostgreSQL (SQL Warehouse) |
-| **SQL Analytics** | Advanced SQL (CTEs, Window Functions, Cohorts) |
-| **Data Science** | Pandas, NumPy, SciPy |
-| **ML/AI** | Scikit-learn, XGBoost, LightGBM |
-| **Explainability** | SHAP, Permutation Importance |
-| **Statistics** | Statsmodels, Scipy.stats |
-| **BI/Dashboard** | Power BI / Tableau |
-| **Backend API** | FastAPI, Uvicorn, Pydantic |
-| **Frontend** | React, Vite, Tailwind CSS |
-| **Deployment** | Docker, Render, Vercel |
-| **Version Control** | Git, GitHub |
+| Layer | Technology |
+|---|---|
+| Backend | Flask 2.3, Flask-SocketIO, Flask-JWT-Extended, Flask-Limiter |
+| Database | PostgreSQL 18 |
+| Cache / Queue | Redis 7 |
+| ML | scikit-learn (RandomForestClassifier), pandas, numpy |
+| API | REST, GraphQL (Ariadne), Swagger (flasgger), Prometheus exporter |
+| Real-time | Socket.IO (threading mode), per-dataset rooms |
+| Exports | reportlab (PDF), openpyxl (Excel), csv |
+| Auth | JWT, bcrypt, pyotp + qrcode (2FA) |
+| Frontend | React, Vite, Tailwind CSS, Zustand, Recharts, react-icons, axios, socket.io-client |
+| Infra | Docker, Docker Compose |
 
 ---
 
-## 📊 Key Features
+## 🚀 Quick Start (Docker)
 
-### Analytics Layer
-- ✅ **EDA:** Comprehensive exploratory data analysis
-- ✅ **Cohort Analysis:** Track retention by signup cohort
-- ✅ **RFM Segmentation:** Recency, Frequency, Monetary value
-- ✅ **Funnel Analysis:** Track user journey
-- ✅ **Retention Curves:** Month-over-month retention rates
+### Prerequisites
+- Docker Desktop
 
-### ML Layer
-- ✅ **Churn Prediction:** XGBoost / LightGBM models
-- ✅ **Customer Segmentation:** K-Means + Behavioral clustering
-- ✅ **Model Comparison:** Multiple algorithms with performance metrics
-- ✅ **Explainability:** SHAP for feature importance & local explanations
+### Run it
 
-### Business Layer
-- ✅ **Revenue-at-Risk:** Churn probability × LTV
-- ✅ **Customer Risk Scoring:** Ranking by intervention priority
-- ✅ **Intervention Recommendations:** Actions & expected ROI
-- ✅ **What-if Simulator:** Scenario modeling with sliders
+```bash
+docker compose up -d --build
+```
 
-### Frontend Layer
-- ✅ **Executive Dashboard:** KPIs, trends, alerts
-- ✅ **Customer Intelligence:** Segments, risk profiles
-- ✅ **Churn Analytics:** High-risk customers with drivers
-- ✅ **Marketing Analytics:** CAC, ROAS, attribution
-- ✅ **Scenario Simulator:** Dynamic what-if modeling
+This starts:
 
----
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:9000 |
+| Backend API | http://localhost:5000 |
+| Swagger docs | http://localhost:5000/api/docs |
+| GraphQL playground | http://localhost:5000/graphql |
+| Prometheus metrics | http://localhost:5000/metrics |
+| PostgreSQL | localhost:5432 |
+| Redis | localhost:6379 |
 
-## 📈 Expected Outcomes (Resume Impact)
+### Default login
 
-Instead of: *"Built a churn prediction model."*
+A default admin account is seeded automatically on first run:
 
-**You'll have:**
+```
+username: admin
+password: admin123
+```
 
-> **Customer Intelligence & Revenue Risk Engine** — Engineered an end-to-end analytics platform processing 5M+ behavioral events using advanced SQL, cohort/retention analysis, behavioral segmentation and XGBoost; developed SHAP-based explainability and a revenue-at-risk engine to quantify and prioritize customer retention interventions.
+### Upload your own data
 
-> **Executive BI Dashboard** — Designed and deployed an interactive Power BI dashboard integrating customer 360°, LTV, CAC, cohort retention, churn drivers and what-if simulations, enabling scenario-based estimation of revenue preserved through retention improvements.
-
-> **Recommendation Engine & API** — Built a FastAPI backend serving customer-level intervention recommendations using churn probability, predicted LTV and behavioral risk signals, with real-time analytics capabilities for stakeholder decision support.
+Once logged in, go to **Datasets → Upload Your Own Dataset**, provide a `customers.csv` (required — must include `customer_id, first_name, last_name, email, country, industry, acquisition_channel, signup_date`) plus optional `events.csv` / `transactions.csv` / `support_tickets.csv`. Processing runs in the background; once status flips to `ready`, activate it to see Analytics, Customers, and Live Feed update to your data.
 
 ---
 
-## 🔗 Resources
+## 📂 Key Files
 
-- [Architecture Deep Dive](./docs/ARCHITECTURE.md)
-- [Data Dictionary](./docs/DATA_DICTIONARY.md)
-- [SQL Query Library](./docs/QUERIES.md)
-- [Deployment Guide](./docs/DEPLOYMENT.md)
-- [Development Roadmap](./docs/ROADMAP.md)
+```
+phase5_api_server.py    Main Flask entrypoint — registers all blueprints, JWT/rate-limit/Swagger/Prometheus setup
+auth.py                 Login/register/refresh, seeds default admin
+datasets_bp.py          Multi-tenant dataset upload, processing, feature engineering, CRUD
+ml_bp.py                Per-dataset RandomForest training + metrics endpoints
+customers_bp.py         Customer search + profile endpoints
+export_bp.py            CSV / Excel / PDF export endpoints
+insights.py             Automated insight generation (trend, segment, geo, customer-level)
+realtime.py             Socket.IO live risk-alert feed (per-dataset rooms)
+jobs.py                 Background job status + risk snapshot refresh
+admin_bp.py             API key management, RBAC
+twofa.py                TOTP two-factor authentication
+webhooks_bp.py          Webhook CRUD + HMAC-signed delivery
+graphql_bp.py           Ariadne GraphQL schema/resolvers
+import_bp.py            Admin CSV bulk customer import
+cache.py                Redis cache helpers (with tenant-aware vary_by keys)
+audit.py                Audit logging + shared DB connection helper
+Dockerfile              Backend image build
+docker-compose.yml      Full stack orchestration
+requirements-phase5.txt Backend Python dependencies
+
+frontend/src/
+  components/           React components (AnalyticsDashboard, CustomerExplorer, DatasetManager,
+                        LiveActivityFeed, ModelMetricsDashboard, SettingsPage, Login, ...)
+  store/                Zustand stores (auth, dashboard, dataset, theme, notifications)
+  api/client.js         Axios API client with auto token-refresh
+  lib/socket.js         Socket.IO client wrapper
+```
+
+---
+
+## 🔑 Environment Variables
+
+See `.env.example`. Key variables (defaults are fine for local Docker use):
+
+```
+JWT_SECRET_KEY=change-me-in-production
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=customer_intelligence
+DB_USER=postgres
+DB_PASSWORD=sushanth123
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
 
 ---
 
 ## 📝 License
 
-MIT License — See LICENSE for details.
+MIT License — see LICENSE for details.
 
 ---
 
-## 🎓 Learning Resources
-
-- PostgreSQL Window Functions: [PostgreSQL Docs](https://www.postgresql.org/docs/current/functions-window.html)
-- XGBoost Tuning: [XGBoost Docs](https://xgboost.readthedocs.io/)
-- SHAP Explanations: [SHAP GitHub](https://github.com/slundberg/shap)
-- Power BI DAX: [Microsoft Learn](https://learn.microsoft.com/en-us/dax/)
-- FastAPI: [FastAPI Docs](https://fastapi.tiangolo.com/)
-- React Patterns: [React Docs](https://react.dev/)
-
----
-
-**Last Updated:** 2026-09-09  
-**Project Phase:** Phase 1 - Foundation & Setup  
-**Status:** 🟡 In Progress
-
+**Last Updated:** 2026-09-10

@@ -1,0 +1,8 @@
+timestamp: 2026-09-09T19:56:54.010695
+churn_auc: 1.0
+churn_accuracy: 1.0
+revenue_r2: 0.8133259266811518
+revenue_rmse: 336.14313830976585
+engagement_r2: 0.998670971845992
+engagement_rmse: 1.1271656876366243
+segmentation_clusters: 4
