@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements-phase5.txt
 
 # Copy application files
 COPY phase5_api_server.py .
-COPY cache.py extensions.py auth.py customers_bp.py jobs.py export_bp.py realtime.py rbac.py audit.py admin_bp.py twofa.py webhooks_bp.py import_bp.py graphql_bp.py insights.py datasets_bp.py ml_bp.py cohort_bp.py .
+COPY bootstrap_db.py seed_data.py cache.py extensions.py auth.py customers_bp.py jobs.py export_bp.py realtime.py rbac.py audit.py admin_bp.py twofa.py webhooks_bp.py import_bp.py graphql_bp.py insights.py datasets_bp.py ml_bp.py cohort_bp.py .
 COPY models/ ./models/
 
 # Expose port
@@ -34,4 +34,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/health || exit 1
 
 # Run the application
-CMD ["python", "phase5_api_server.py"]
+CMD ["sh", "-c", "python bootstrap_db.py && python phase5_api_server.py"]
