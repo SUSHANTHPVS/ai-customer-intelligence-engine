@@ -100,4 +100,8 @@ if __name__ == '__main__':
     bootstrap_raw_tables()
     from seed_data import seed_database
     seed_database()
+    from auth import init_auth_db
+    from datasets_bp import init_datasets_db
+    init_auth_db()
+    init_datasets_db()
     print('[Bootstrap] Database ready')
