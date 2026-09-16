@@ -72,7 +72,7 @@ cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:9000,http://localhost
 CORS(app, origins=[origin.strip() for origin in cors_origins if origin.strip()])
 
 # Limit upload size (dataset CSV uploads) to prevent resource-exhaustion abuse
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+app.config['MAX_CONTENT_LENGTH'] = 250 * 1024 * 1024  # 250 MB for multi-file dataset uploads
 
 # JWT authentication
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-change-in-production')

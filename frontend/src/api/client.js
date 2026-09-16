@@ -107,6 +107,7 @@ export const apiClient = {
     remove: (id) => client.delete(`/datasets/${id}`),
     upload: (formData) => client.post('/datasets/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
     }),
     trainModel: (id) => client.post(`/datasets/${id}/train`),
     trainAllModels: () => client.post('/datasets/train-all'),
