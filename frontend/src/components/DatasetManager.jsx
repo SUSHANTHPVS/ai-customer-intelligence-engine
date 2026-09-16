@@ -11,6 +11,22 @@ const statusBadge = (status) => {
   return 'bg-yellow-100 text-yellow-800';
 };
 
+const fileStatusStyle = {
+  idle: 'text-gray-400',
+  selected: 'text-blue-600',
+  processing: 'text-yellow-600',
+  ready: 'text-green-600',
+  failed: 'text-red-600',
+};
+
+const fileStatusLabel = {
+  idle: 'Not selected',
+  selected: 'Selected',
+  processing: 'Processing',
+  ready: 'Ready',
+  failed: 'Failed',
+};
+
 const completenessColor = (pct) => {
   if (pct >= 95) return 'text-green-600';
   if (pct >= 80) return 'text-yellow-600';
@@ -24,6 +40,12 @@ const DatasetManager = () => {
   const [name, setName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+    const [fileStatuses, setFileStatuses] = useState({
+      customers: 'idle',
+      events: 'idle',
+      transactions: 'idle',
+      support_tickets: 'idle',
+    });
   const [processingId, setProcessingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [trainingId, setTrainingId] = useState(null);
@@ -52,17 +74,34 @@ const DatasetManager = () => {
 
   const pollStatus = (id) => {
     pollRef.current = setInterval(async () => {
-      const { data } = await apiClient.datasets.status(id);
-      if (data.status === 'ready' || data.status === 'failed') {
-        clearInterval(pollRef.current);
-        setProcessingId(null);
-        refresh();
-        if (data.status === 'ready') {
-          reconnectSocket();
-          await refreshDashboard();
+      try {
+        const { data } = await apiClient.datasets.status(id);
+        if (data.status === 'ready' || data.status === 'failed') {
+          clearInterval(pollRef.current);
+          setProcessingId(null);
+          setFileStatuses((current) => Object.fromEntries(
+            Object.entries(current).map(([file, status]) => [
+              file,
+              status === 'processing' ? data.status : status,
+            ])
+          ));
+          refresh();
+          if (data.status === 'ready') {
+            reconnectSocket();
+            await refreshDashboard();
+          }
         }
+      } catch (error) {
+        setUploadError('Unable to check dataset processing status. Please refresh and try again.');
       }
     }, 3000);
+  };
+
+  const markFileSelected = (file, inputRef) => {
+    setFileStatuses((current) => ({
+      ...current,
+      [file]: inputRef.current?.files?.[0] ? 'selected' : 'idle',
+    }));
   };
 
   const handleUpload = async (e) => {
@@ -81,6 +120,18 @@ const DatasetManager = () => {
     if (transactionsRef.current?.files?.[0]) formData.append('transactions', transactionsRef.current.files[0]);
     if (supportRef.current?.files?.[0]) formData.append('support_tickets', supportRef.current.files[0]);
 
+    const selectedFiles = {
+      customers: Boolean(customersRef.current?.files?.[0]),
+      events: Boolean(eventsRef.current?.files?.[0]),
+      transactions: Boolean(transactionsRef.current?.files?.[0]),
+      support_tickets: Boolean(supportRef.current?.files?.[0]),
+    };
+    setFileStatuses((current) => Object.fromEntries(
+      Object.entries(selectedFiles).map(([file, selected]) => [
+        file,
+        selected ? 'processing' : current[file],
+      ])
+    ));
     setUploading(true);
     try {
       const { data } = await apiClient.datasets.upload(formData);
@@ -92,6 +143,12 @@ const DatasetManager = () => {
       await refresh();
       pollStatus(data.dataset_id);
     } catch (error) {
+      setFileStatuses((current) => Object.fromEntries(
+        Object.entries(current).map(([file, status]) => [
+          file,
+          status === 'processing' ? 'failed' : status,
+        ])
+      ));
       setUploadError(error.response?.data?.error || 'Upload failed');
     } finally {
       setUploading(false);
@@ -195,19 +252,31 @@ const DatasetManager = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">customers.csv (required)</label>
-              <input ref={customersRef} type="file" accept=".csv" className="text-sm" />
+              <div className="flex items-center gap-2">
+                <input ref={customersRef} type="file" accept=".csv" className="text-sm" onChange={() => markFileSelected('customers', customersRef)} />
+                <span className={`text-xs font-semibold ${fileStatusStyle[fileStatuses.customers]}`}>{fileStatusLabel[fileStatuses.customers]}</span>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">events.csv (optional)</label>
-              <input ref={eventsRef} type="file" accept=".csv" className="text-sm" />
+              <div className="flex items-center gap-2">
+                <input ref={eventsRef} type="file" accept=".csv" className="text-sm" onChange={() => markFileSelected('events', eventsRef)} />
+                <span className={`text-xs font-semibold ${fileStatusStyle[fileStatuses.events]}`}>{fileStatusLabel[fileStatuses.events]}</span>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">transactions.csv (optional)</label>
-              <input ref={transactionsRef} type="file" accept=".csv" className="text-sm" />
+              <div className="flex items-center gap-2">
+                <input ref={transactionsRef} type="file" accept=".csv" className="text-sm" onChange={() => markFileSelected('transactions', transactionsRef)} />
+                <span className={`text-xs font-semibold ${fileStatusStyle[fileStatuses.transactions]}`}>{fileStatusLabel[fileStatuses.transactions]}</span>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">support_tickets.csv (optional)</label>
-              <input ref={supportRef} type="file" accept=".csv" className="text-sm" />
+              <div className="flex items-center gap-2">
+                <input ref={supportRef} type="file" accept=".csv" className="text-sm" onChange={() => markFileSelected('support_tickets', supportRef)} />
+                <span className={`text-xs font-semibold ${fileStatusStyle[fileStatuses.support_tickets]}`}>{fileStatusLabel[fileStatuses.support_tickets]}</span>
+              </div>
             </div>
           </div>
 
