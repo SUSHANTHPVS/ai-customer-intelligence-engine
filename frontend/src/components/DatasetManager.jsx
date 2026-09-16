@@ -43,7 +43,11 @@ const DatasetManager = () => {
 
   useEffect(() => {
     refresh();
-    return () => clearInterval(pollRef.current);
+    const statusPoll = setInterval(refresh, 5000);
+    return () => {
+      clearInterval(pollRef.current);
+      clearInterval(statusPoll);
+    };
   }, [refresh]);
 
   const pollStatus = (id) => {
