@@ -18,7 +18,11 @@ from flask_jwt_extended import decode_token
 from flask_socketio import SocketIO, join_room
 
 logger = logging.getLogger(__name__)
-socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
+cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:9000,http://localhost:5173').split(',')
+socketio = SocketIO(
+    cors_allowed_origins=[origin.strip() for origin in cors_origins if origin.strip()],
+    async_mode="threading",
+)
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'postgres'),

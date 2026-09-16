@@ -68,7 +68,8 @@ def _dataset_cache_key():
 
 # Create Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:9000,http://localhost:5173').split(',')
+CORS(app, origins=[origin.strip() for origin in cors_origins if origin.strip()])
 
 # Limit upload size (dataset CSV uploads) to prevent resource-exhaustion abuse
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
@@ -1238,13 +1239,14 @@ if __name__ == '__main__':
     logger.info("  GET  /api/docs (Swagger UI)")
     logger.info("  WS   /socket.io (live risk_alert feed)")
     logger.info("  GET  /health")
-    logger.info("\n[API Server] Server running at http://localhost:5000\n")
+    server_port = int(os.getenv('PORT', 5000))
+    logger.info(f"\n[API Server] Server running on port {server_port}\n")
     
     # Run server (SocketIO wraps the Werkzeug dev server for WebSocket support)
     socketio.run(
         app,
         host='0.0.0.0',
-        port=5000,
+        port=server_port,
         debug=False,
         use_reloader=False,
         allow_unsafe_werkzeug=True,
