@@ -6,6 +6,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 import random
 import os
+import time
 
 # Database configuration
 DB_CONFIG = {
@@ -19,7 +20,15 @@ DB_CONFIG = {
 def seed_database():
     """Create and populate feature tables with sample data"""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
+        conn = None
+        for attempt in range(12):
+            try:
+                conn = psycopg2.connect(**DB_CONFIG)
+                break
+            except psycopg2.OperationalError:
+                if attempt == 11:
+                    raise
+                time.sleep(min(5 * (attempt + 1), 15))
         cur = conn.cursor()
         
         print("[Seed] Connecting to database...")

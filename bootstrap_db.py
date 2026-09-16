@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime, timedelta
 
 import psycopg2
@@ -12,8 +13,21 @@ DB_CONFIG = {
 }
 
 
+def connect_with_retry():
+    last_error = None
+    for attempt in range(12):
+        try:
+            return psycopg2.connect(**DB_CONFIG)
+        except psycopg2.OperationalError as error:
+            last_error = error
+            if attempt == 11:
+                raise
+            time.sleep(min(5 * (attempt + 1), 15))
+    raise last_error
+
+
 def bootstrap_raw_tables():
-    conn = psycopg2.connect(**DB_CONFIG)
+    conn = connect_with_retry()
     cur = conn.cursor()
     try:
         cur.execute('''
