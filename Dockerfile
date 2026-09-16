@@ -34,4 +34,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/health || exit 1
 
 # Run the application
-CMD ["sh", "-c", "python bootstrap_db.py || echo '[Bootstrap] Database initialization deferred; starting API'; python phase5_api_server.py"]
+CMD ["sh", "-c", "python bootstrap_db.py > /tmp/bootstrap_db.log 2>&1 & exec python phase5_api_server.py"]
