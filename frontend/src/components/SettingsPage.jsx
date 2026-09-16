@@ -1,34 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { FiMoon, FiSun, FiKey, FiTrash2, FiPlus, FiFileText, FiShield, FiLink, FiExternalLink, FiSend } from 'react-icons/fi';
-import useThemeStore from '../store/themeStore';
+import { FiKey, FiTrash2, FiPlus, FiFileText, FiShield, FiLink, FiExternalLink, FiSend, FiBell, FiUser, FiDatabase } from 'react-icons/fi';
 import useAuthStore from '../store/authStore';
 import { apiClient } from '../api/client';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const SettingsPage = () => {
-  const { darkMode, toggleDarkMode } = useThemeStore();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Appearance</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">Dark Mode</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Switch between light and dark themes</p>
-          </div>
-          <button
-            onClick={toggleDarkMode}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            {darkMode ? <FiSun /> : <FiMoon />}
-            {darkMode ? 'Light Mode' : 'Dark Mode'}
-          </button>
-        </div>
-      </div>
+      <ProfileSettings />
+      <NotificationPreferences />
+      <DataPreferences />
 
       <TwoFactorSettings />
 
@@ -50,6 +35,307 @@ const SettingsPage = () => {
           </a>
         </div>
       )}
+    </div>
+  );
+};
+
+const PreferenceToggle = ({ label, description, enabled, onChange }) => (
+  <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 p-3">
+    <div>
+      <p className="font-medium text-gray-900 dark:text-white">{label}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+    >
+      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+    </button>
+  </div>
+);
+
+const ProfileSettings = () => {
+  const { user } = useAuthStore();
+  const [form, setForm] = useState({
+    username: user?.username || '',
+    email: user?.email || '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      username: user?.username || prev.username || '',
+      email: user?.email || prev.email || '',
+    }));
+  }, [user]);
+
+  const handleChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    setMessage(null);
+
+    if (!form.username.trim() || !form.email.trim()) {
+      setMessage({ type: 'error', text: 'Username and email are required.' });
+      return;
+    }
+
+    if (form.newPassword || form.confirmPassword || form.currentPassword) {
+      if (!form.currentPassword) {
+        setMessage({ type: 'error', text: 'Current password is required when changing your password.' });
+        return;
+      }
+
+      if (form.newPassword.length < 6) {
+        setMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+        return;
+      }
+
+      if (form.newPassword !== form.confirmPassword) {
+        setMessage({ type: 'error', text: 'New password and confirmation do not match.' });
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const { data } = await apiClient.auth.updateProfile({
+        username: form.username,
+        email: form.email,
+        current_password: form.currentPassword,
+        new_password: form.newPassword,
+      });
+
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      useAuthStore.setState({ user: data.user });
+
+      if (data.access_token) {
+        localStorage.setItem('auth_token', data.access_token);
+        useAuthStore.setState({ accessToken: data.access_token });
+      }
+
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+        useAuthStore.setState({ refreshToken: data.refresh_token });
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
+      setMessage({ type: 'success', text: 'Profile updated successfully.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to update profile.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <FiUser /> Profile & Account
+      </h3>
+
+      {message && (
+        <p className={`mb-4 text-sm ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+          {message.text}
+        </p>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Username</label>
+          <input
+            value={form.username}
+            onChange={(e) => handleChange('username', e.target.value)}
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => handleChange('email', e.target.value)}
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Current Password</label>
+          <input
+            type="password"
+            value={form.currentPassword}
+            onChange={(e) => handleChange('currentPassword', e.target.value)}
+            placeholder="Only required when changing your password"
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">New Password</label>
+          <input
+            type="password"
+            value={form.newPassword}
+            onChange={(e) => handleChange('newPassword', e.target.value)}
+            placeholder="Leave blank to keep current password"
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Confirm New Password</label>
+          <input
+            type="password"
+            value={form.confirmPassword}
+            onChange={(e) => handleChange('confirmPassword', e.target.value)}
+            placeholder="Confirm new password"
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+          />
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between gap-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-700 dark:text-blue-200">
+        <span>Keep your profile information up to date so alerts, exports, and audit logs remain accurate.</span>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const NotificationPreferences = () => {
+  const [preferences, setPreferences] = useState({});
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const { data } = await apiClient.auth.getPreferences();
+        setPreferences(data.preferences || {});
+      } catch {
+        setPreferences({});
+      }
+    };
+
+    loadPreferences();
+  }, []);
+
+  const updatePreference = async (key, defaultValue) => {
+    const nextValue = !(preferences[key] ?? defaultValue);
+    const nextPreferences = { ...preferences, [key]: nextValue };
+    setPreferences(nextPreferences);
+
+    try {
+      await apiClient.auth.updatePreferences(nextPreferences);
+      window.dispatchEvent(new CustomEvent('preferences-updated', { detail: nextPreferences }));
+    } catch {
+      setPreferences(preferences);
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <FiBell /> Notifications
+      </h3>
+
+      <div className="space-y-3">
+        <PreferenceToggle
+          label="Churn risk alerts"
+          description="Send instant notifications when a HIGH-risk customer is detected."
+          enabled={preferences.riskAlerts ?? true}
+          onChange={() => updatePreference('riskAlerts', true)}
+        />
+        <PreferenceToggle
+          label="Model drift alerts"
+          description="Warn when monitored models drift beyond the expected thresholds."
+          enabled={preferences.modelDriftAlerts ?? true}
+          onChange={() => updatePreference('modelDriftAlerts', true)}
+        />
+        <PreferenceToggle
+          label="Weekly summary"
+          description="Receive a digest of model performance, retention trends, and top insights each week."
+          enabled={preferences.weeklySummary ?? false}
+          onChange={() => updatePreference('weeklySummary', false)}
+        />
+      </div>
+    </div>
+  );
+};
+
+const DataPreferences = () => {
+  const [preferences, setPreferences] = useState({});
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const { data } = await apiClient.auth.getPreferences();
+        setPreferences(data.preferences || {});
+      } catch {
+        setPreferences({});
+      }
+    };
+
+    loadPreferences();
+  }, []);
+
+  const updatePreference = async (key, defaultValue) => {
+    const nextValue = !(preferences[key] ?? defaultValue);
+    const nextPreferences = { ...preferences, [key]: nextValue };
+    setPreferences(nextPreferences);
+
+    try {
+      await apiClient.auth.updatePreferences(nextPreferences);
+      window.dispatchEvent(new CustomEvent('preferences-updated', { detail: nextPreferences }));
+    } catch {
+      setPreferences(preferences);
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <FiDatabase /> Data & Dashboard
+      </h3>
+
+      <div className="space-y-3">
+        <PreferenceToggle
+          label="Auto-refresh dashboard data"
+          description="Refresh analytics and model KPI cards automatically after every data update."
+          enabled={preferences.autoRefresh ?? true}
+          onChange={() => updatePreference('autoRefresh', true)}
+        />
+        <PreferenceToggle
+          label="Compact dashboard layout"
+          description="Reduce whitespace in cards to fit more summaries on one screen."
+          enabled={preferences.compactLayout ?? false}
+          onChange={() => updatePreference('compactLayout', false)}
+        />
+        <PreferenceToggle
+          label="Show descriptive empty-state labels"
+          description="Display 'No data' labels in tables where there is no activity for a cohort or metric."
+          enabled={preferences.showEmptyLabels ?? true}
+          onChange={() => updatePreference('showEmptyLabels', true)}
+        />
+      </div>
     </div>
   );
 };

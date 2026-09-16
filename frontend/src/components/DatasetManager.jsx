@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FiUploadCloud, FiCheckCircle, FiXCircle, FiClock, FiPlay, FiTrash2, FiDatabase, FiChevronDown, FiChevronUp, FiCpu, FiShield, FiAlertTriangle } from 'react-icons/fi';
 import { apiClient } from '../api/client';
 import useDatasetStore from '../store/datasetStore';
+import useDashboardStore from '../store/dashboardStore';
 import { reconnectSocket } from '../lib/socket';
 
 const statusBadge = (status) => {
@@ -19,6 +20,7 @@ const completenessColor = (pct) => {
 
 const DatasetManager = () => {
   const { datasets, activeDatasetId, refresh } = useDatasetStore();
+  const refreshDashboard = useDashboardStore((state) => state.refreshAll);
   const [name, setName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -26,6 +28,9 @@ const DatasetManager = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [trainingId, setTrainingId] = useState(null);
   const [trainError, setTrainError] = useState(null);
+  const [trainingAll, setTrainingAll] = useState(false);
+  const [trainAllError, setTrainAllError] = useState(null);
+  const [trainAllSummary, setTrainAllSummary] = useState(null);
   const [detectingId, setDetectingId] = useState(null);
   const [detectError, setDetectError] = useState(null);
   const [refreshingQualityId, setRefreshingQualityId] = useState(null);
@@ -50,6 +55,7 @@ const DatasetManager = () => {
         refresh();
         if (data.status === 'ready') {
           reconnectSocket();
+          await refreshDashboard();
         }
       }
     }, 3000);
@@ -92,6 +98,7 @@ const DatasetManager = () => {
     await apiClient.datasets.activate(id);
     await refresh();
     reconnectSocket();
+    await refreshDashboard();
   };
 
   const handleDelete = async (id) => {
@@ -109,6 +116,20 @@ const DatasetManager = () => {
       setTrainError(error.response?.data?.error || 'Training failed');
     } finally {
       setTrainingId(null);
+    }
+  };
+
+  const handleTrainAllModels = async () => {
+    setTrainAllError(null);
+    setTrainingAll(true);
+    try {
+      const { data } = await apiClient.datasets.trainAllModels();
+      setTrainAllSummary(data);
+      await refresh();
+    } catch (error) {
+      setTrainAllError(error.response?.data?.error || 'Training all models failed');
+    } finally {
+      setTrainingAll(false);
     }
   };
 
@@ -203,9 +224,26 @@ const DatasetManager = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <FiDatabase /> Your Datasets
-        </h3>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <FiDatabase /> Your Datasets
+          </h3>
+          <button
+            onClick={handleTrainAllModels}
+            disabled={trainingAll}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
+          >
+            <FiCpu /> {trainingAll ? 'Training All Models...' : 'Train All Models'}
+          </button>
+        </div>
+        {trainAllError && (
+          <p className="text-xs text-red-500 mb-3">{trainAllError}</p>
+        )}
+        {trainAllSummary && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            Trained {trainAllSummary.trained} datasets. Target accuracy is {trainAllSummary.target_accuracy * 100}%. Results updated in the dataset cards.
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-gray-200">

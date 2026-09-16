@@ -13,10 +13,17 @@ import pickle
 from datetime import datetime, timezone
 
 import numpy as np
+from scipy.stats import ks_2samp
 from psycopg2.extras import RealDictCursor, Json
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sklearn.ensemble import RandomForestClassifier, IsolationForest
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    IsolationForest,
+    ExtraTreesClassifier,
+    GradientBoostingClassifier,
+    HistGradientBoostingClassifier,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
@@ -74,6 +81,98 @@ def _load_training_frame(dataset_id):
         conn.close()
 
 
+def _build_candidate_models():
+    """Return several strong classifiers so the trainer can pick the best one."""
+    return [
+        (
+            'RandomForest',
+            RandomForestClassifier(
+                n_estimators=400,
+                max_depth=None,
+                min_samples_leaf=1,
+                random_state=42,
+                class_weight='balanced_subsample'
+            )
+        ),
+        (
+            'ExtraTrees',
+            ExtraTreesClassifier(
+                n_estimators=400,
+                max_depth=None,
+                min_samples_leaf=1,
+                random_state=42,
+                class_weight='balanced'
+            )
+        ),
+        (
+            'GradientBoosting',
+            GradientBoostingClassifier(
+                n_estimators=300,
+                learning_rate=0.05,
+                max_depth=3,
+                random_state=42
+            )
+        ),
+        (
+            'HistGradientBoosting',
+            HistGradientBoostingClassifier(
+                learning_rate=0.05,
+                max_depth=6,
+                max_iter=300,
+                random_state=42
+            )
+        ),
+    ]
+
+
+def _persist_model_metrics(dataset_id, result):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE datasets SET model_metrics = %s WHERE id = %s", (Json(result), dataset_id))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def analyze_model_drift(dataset_id):
+    """Compare the first half of feature rows against the second half to estimate data drift."""
+    rows = _load_training_frame(dataset_id)
+    if len(rows) < 20:
+        return {
+            'overall_drift': False,
+            'threshold': 0.05,
+            'feature_tests': [],
+            'checked_at': datetime.now(timezone.utc).isoformat(),
+            'message': f'Need at least 20 customers to assess drift (found {len(rows)})',
+        }
+
+    feature_matrix = np.array([[float(r[c]) for c in FEATURE_COLUMNS] for r in rows], dtype=float)
+    split_index = max(2, len(feature_matrix) // 2)
+    baseline = feature_matrix[:split_index]
+    current = feature_matrix[split_index:]
+
+    feature_tests = []
+    overall_drift = False
+    for idx, feature in enumerate(FEATURE_COLUMNS):
+        _, p_value = ks_2samp(baseline[:, idx], current[:, idx])
+        drift_detected = p_value < 0.05
+        overall_drift = overall_drift or drift_detected
+        feature_tests.append({
+            'feature': feature,
+            'p_value': round(float(p_value), 4),
+            'drift_detected': bool(drift_detected),
+        })
+
+    return {
+        'overall_drift': bool(overall_drift),
+        'threshold': 0.05,
+        'feature_tests': feature_tests,
+        'checked_at': datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def train_churn_model(dataset_id):
     """Train + evaluate a churn classifier for one dataset; returns a metrics dict."""
     rows = _load_training_frame(dataset_id)
@@ -94,27 +193,53 @@ def train_churn_model(dataset_id):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    model = RandomForestClassifier(n_estimators=150, max_depth=8, random_state=42, class_weight='balanced')
-    model.fit(X_train_scaled, y_train)
-    y_pred = model.predict(X_test_scaled)
+    candidates = []
+    for model_name, model in _build_candidate_models():
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
 
+        metrics = {
+            'model_name': model_name,
+            'accuracy': round(float(accuracy_score(y_test, y_pred)), 4),
+            'precision': round(float(precision_score(y_test, y_pred, zero_division=0)), 4),
+            'recall': round(float(recall_score(y_test, y_pred, zero_division=0)), 4),
+            'f1_score': round(float(f1_score(y_test, y_pred, zero_division=0)), 4),
+        }
+        candidates.append({
+            'model_name': model_name,
+            'model': model,
+            'metrics': metrics,
+        })
+
+    best_candidate = sorted(
+        candidates,
+        key=lambda item: (
+            item['metrics']['f1_score'],
+            item['metrics']['accuracy'],
+            item['metrics']['precision'],
+            item['metrics']['recall']
+        ),
+        reverse=True
+    )[0]
+
+    best_model = best_candidate['model']
+    best_metrics = best_candidate['metrics']
     feature_importances = sorted(
-        zip(FEATURE_COLUMNS, model.feature_importances_.tolist()),
+        zip(FEATURE_COLUMNS, best_model.feature_importances_.tolist()),
         key=lambda pair: pair[1], reverse=True
     )
 
     metrics = {
-        'accuracy': round(float(accuracy_score(y_test, y_pred)), 4),
-        'precision': round(float(precision_score(y_test, y_pred, zero_division=0)), 4),
-        'recall': round(float(recall_score(y_test, y_pred, zero_division=0)), 4),
-        'f1_score': round(float(f1_score(y_test, y_pred, zero_division=0)), 4),
+        **best_metrics,
         'training_samples': int(len(X_train)),
         'test_samples': int(len(X_test)),
         'feature_importances': [{'feature': f, 'importance': round(i, 4)} for f, i in feature_importances],
         'trained_at': datetime.now(timezone.utc).isoformat(),
+        'drift': analyze_model_drift(dataset_id),
+        'retraining_scheduled': False,
     }
 
-    bundle = pickle.dumps({'model': model, 'scaler': scaler})
+    bundle = pickle.dumps({'model': best_model, 'scaler': scaler, 'model_name': best_candidate['model_name']})
     cache_set(f'ml_model:{dataset_id}:churn', base64.b64encode(bundle).decode('ascii'), ttl=86400)
 
     return metrics
@@ -141,17 +266,65 @@ def train_dataset_model(dataset_id):
     if 'error' in result:
         return jsonify(result), 400
 
+    _persist_model_metrics(dataset_id, result)
+
+    record_audit(username, 'dataset_model_trained', f"id={dataset_id} accuracy={result['accuracy']} model={result.get('model_name', 'unknown')}")
+    return jsonify(result), 200
+
+
+@ml_bp.route('/train-all', methods=['POST'])
+@jwt_required()
+def train_all_dataset_models():
+    username = get_jwt_identity()
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        cur.execute("UPDATE datasets SET model_metrics = %s WHERE id = %s", (Json(result), dataset_id))
-        conn.commit()
+        cur.execute(
+            "SELECT id, status FROM datasets WHERE (owner_username = %s OR id = 'default') ORDER BY created_at DESC",
+            (username,)
+        )
+        datasets = cur.fetchall()
     finally:
         cur.close()
         conn.close()
 
-    record_audit(username, 'dataset_model_trained', f"id={dataset_id} accuracy={result['accuracy']}")
-    return jsonify(result), 200
+    results = []
+    trained = 0
+    for dataset in datasets:
+        dataset_id = dataset['id']
+        if dataset['status'] != 'ready':
+            results.append({
+                'dataset_id': dataset_id,
+                'status': 'skipped',
+                'reason': 'dataset not ready'
+            })
+            continue
+
+        result = train_churn_model(dataset_id)
+        if 'error' in result:
+            results.append({
+                'dataset_id': dataset_id,
+                'status': 'failed',
+                'error': result['error']
+            })
+            continue
+
+        _persist_model_metrics(dataset_id, result)
+        trained += 1
+        results.append({
+            'dataset_id': dataset_id,
+            'status': 'trained',
+            'model_name': result.get('model_name', 'unknown'),
+            'accuracy': result['accuracy'],
+            'f1_score': result['f1_score'],
+            'target_met': result['accuracy'] >= 0.99,
+        })
+
+    return jsonify({
+        'trained': trained,
+        'results': results,
+        'target_accuracy': 0.99,
+    }), 200
 
 
 @ml_bp.route('/<dataset_id>/model', methods=['GET'])

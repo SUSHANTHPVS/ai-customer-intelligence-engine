@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiMenu, FiX, FiBarChart2, FiTrendingUp, FiSettings, FiLogOut, FiUsers, FiActivity, FiDatabase, FiGrid } from 'react-icons/fi';
+import { apiClient } from './api/client';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import ModelMetricsDashboard from './components/ModelMetricsDashboard';
 import CustomerExplorer from './components/CustomerExplorer';
@@ -19,6 +20,7 @@ import './App.css';
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('analytics');
+  const [preferences, setPreferences] = useState({});
   const { error, lastUpdated } = useDashboardStore();
   const { user, accessToken, logout } = useAuthStore();
   const { refresh: refreshDatasets, getActiveDatasetName } = useDatasetStore();
@@ -27,6 +29,40 @@ function App() {
   useEffect(() => {
     if (accessToken) refreshDatasets();
   }, [accessToken, refreshDatasets]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const loadPreferences = async () => {
+      try {
+        const { data } = await apiClient.auth.getPreferences();
+        setPreferences(data.preferences || {});
+      } catch {
+        setPreferences({});
+      }
+    };
+
+    loadPreferences();
+  }, [accessToken]);
+
+  useEffect(() => {
+    const handlePreferencesUpdated = (event) => {
+      setPreferences((prev) => ({ ...prev, ...event.detail }));
+    };
+
+    window.addEventListener('preferences-updated', handlePreferencesUpdated);
+    return () => window.removeEventListener('preferences-updated', handlePreferencesUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken || !(preferences.autoRefresh ?? true)) return;
+
+    const refreshLoop = setInterval(() => {
+      useDashboardStore.getState().refreshAll();
+    }, 60000);
+
+    return () => clearInterval(refreshLoop);
+  }, [accessToken, preferences.autoRefresh]);
 
   if (!accessToken) {
     return <Login />;
@@ -140,7 +176,10 @@ function App() {
         )}
 
         {/* Content Area */}
-        <main className="flex-1 overflow-auto px-8 py-6">
+        <main
+          className="flex-1 overflow-auto px-8 py-6"
+          style={preferences.compactLayout ? { padding: '1rem' } : undefined}
+        >
           {/* Health Status Card */}
           <div className="mb-6">
             <HealthStatus />
@@ -149,7 +188,7 @@ function App() {
           {/* Tab Content */}
           {activeTab === 'analytics' && <AnalyticsDashboard />}
           {activeTab === 'customers' && <CustomerExplorer />}
-          {activeTab === 'cohorts' && <CohortAnalysis />}
+          {activeTab === 'cohorts' && <CohortAnalysis showEmptyLabels={preferences.showEmptyLabels ?? true} />}
           {activeTab === 'live' && <LiveActivityFeed />}
           {activeTab === 'models' && <ModelMetricsDashboard />}
           {activeTab === 'datasets' && <DatasetManager />}

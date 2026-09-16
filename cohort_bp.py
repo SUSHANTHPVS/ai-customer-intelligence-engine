@@ -16,7 +16,7 @@ from datasets_bp import get_active_dataset_id
 logger = logging.getLogger(__name__)
 cohort_bp = Blueprint('cohort', __name__, url_prefix='/analytics')
 
-MAX_MONTH_OFFSET = 6
+MAX_MONTH_OFFSET = 12
 
 
 @cohort_bp.route('/cohort-retention', methods=['GET'])
@@ -65,18 +65,35 @@ def get_cohort_retention():
         conn.close()
 
     cohorts = {}
+    max_offset_seen = 0
+
     for r in rows:
         month_key = r['cohort_month'].strftime('%Y-%m') if r['cohort_month'] else 'unknown'
+
         if month_key not in cohorts:
             cohorts[month_key] = {
                 'cohort_month': month_key,
                 'cohort_size': r['cohort_size'],
-                'retention': [None] * (MAX_MONTH_OFFSET + 1),
+                'retention': {},
             }
+
         if r['month_offset'] is not None and 0 <= r['month_offset'] <= MAX_MONTH_OFFSET:
             size = cohorts[month_key]['cohort_size'] or 0
             pct = round((r['active_customers'] or 0) / size * 100, 1) if size else 0.0
             cohorts[month_key]['retention'][r['month_offset']] = pct
+            if r['month_offset'] > max_offset_seen:
+                max_offset_seen = r['month_offset']
 
-    result = sorted(cohorts.values(), key=lambda c: c['cohort_month'])
-    return jsonify({'cohorts': result, 'max_month_offset': MAX_MONTH_OFFSET}), 200
+    result = []
+    for cohort in sorted(cohorts.values(), key=lambda c: c['cohort_month']):
+        retention = [None] * (max_offset_seen + 1)
+        for offset, pct in cohort['retention'].items():
+            retention[offset] = pct
+
+        result.append({
+            'cohort_month': cohort['cohort_month'],
+            'cohort_size': cohort['cohort_size'],
+            'retention': retention,
+        })
+
+    return jsonify({'cohorts': result, 'max_month_offset': max_offset_seen}), 200

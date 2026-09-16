@@ -15,6 +15,7 @@ export const useDashboardStore = create((set, get) => ({
   models: {
     metrics: {},
     performance: [],
+    leaderboard: [],
   },
   insight: null,
   lastUpdated: null,
@@ -65,15 +66,17 @@ export const useDashboardStore = create((set, get) => ({
   fetchModelMetrics: async () => {
     set({ loading: true, error: null });
     try {
-      const [metrics, performance] = await Promise.all([
+      const [metrics, performance, leaderboard] = await Promise.all([
         apiClient.models.getModelMetrics(),
         apiClient.models.getModelPerformance(),
+        apiClient.models.getModelLeaderboard(),
       ]);
 
       set({
         models: {
           metrics: metrics.data || {},
           performance: performance.data.performance_history || [],
+          leaderboard: leaderboard.data.leaderboard || [],
         },
         loading: false,
       });

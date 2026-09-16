@@ -69,6 +69,7 @@ export const apiClient = {
   models: {
     getModelMetrics: () => client.get('/models/metrics'),
     getModelPerformance: () => client.get('/models/performance'),
+    getModelLeaderboard: () => client.get('/models/leaderboard'),
     retrainModel: (modelName) => client.post(`/models/${modelName}/retrain`),
   },
 
@@ -108,6 +109,7 @@ export const apiClient = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
     trainModel: (id) => client.post(`/datasets/${id}/train`),
+    trainAllModels: () => client.post('/datasets/train-all'),
     getModel: (id) => client.get(`/datasets/${id}/model`),
     detectAnomalies: (id) => client.post(`/datasets/${id}/detect-anomalies`),
     getAnomalies: (id) => client.get(`/datasets/${id}/anomalies`),
@@ -132,6 +134,13 @@ export const apiClient = {
     setup: () => client.post('/auth/2fa/setup'),
     enable: (code) => client.post('/auth/2fa/enable', { code }),
     disable: () => client.post('/auth/2fa/disable'),
+  },
+
+  // User preferences
+  auth: {
+    getPreferences: () => client.get('/auth/preferences'),
+    updatePreferences: (preferences) => client.put('/auth/preferences', { preferences }),
+    updateProfile: (profile) => client.put('/auth/profile', profile),
   },
 
   // Health check

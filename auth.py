@@ -4,6 +4,7 @@ JWT-based authentication blueprint.
 Handles registration, login, token refresh, current-user lookup and
 logout (via a Redis-backed token blocklist since JWTs are stateless).
 """
+import json
 import os
 import time
 import logging
@@ -51,9 +52,12 @@ def init_auth_db():
                 email VARCHAR(120) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(20) DEFAULT 'analyst',
+                preferences JSONB DEFAULT '{}'::jsonb NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        conn.commit()
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb NOT NULL")
         conn.commit()
 
         cur.execute("SELECT COUNT(*) FROM users")
@@ -79,6 +83,39 @@ def _serialize_user(row):
     }
 
 
+@auth_bp.route('/preferences', methods=['GET', 'PUT'])
+@jwt_required()
+def preferences():
+    identity = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        if request.method == 'GET':
+            cur.execute("SELECT preferences FROM users WHERE username = %s", (identity,))
+            row = cur.fetchone()
+            return jsonify({'preferences': row['preferences'] or {}} if row else {'preferences': {}}), 200
+
+        data = request.get_json(silent=True) or {}
+        preferences = data.get('preferences')
+        if not isinstance(preferences, dict):
+            return jsonify({'error': 'preferences must be an object'}), 400
+
+        cur.execute(
+            "UPDATE users SET preferences = %s WHERE username = %s RETURNING preferences",
+            (json.dumps(preferences), identity)
+        )
+        updated = cur.fetchone()
+        conn.commit()
+        return jsonify({'preferences': updated['preferences'] or {}} if updated else {'preferences': {}}), 200
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[Auth] preferences update failed: {e}")
+        return jsonify({'error': 'Failed to update preferences'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
 @auth_bp.route('/register', methods=['POST'])
 @limiter.limit('10 per minute')
 def register():
@@ -86,9 +123,13 @@ def register():
     username = (data.get('username') or '').strip()
     email = (data.get('email') or '').strip()
     password = data.get('password') or ''
+    requested_role = (data.get('role') or 'analyst').strip().lower()
 
     if not username or not email or len(password) < 6:
         return jsonify({'error': 'username, email and password (min 6 chars) are required'}), 400
+
+    if requested_role not in {'analyst', 'admin'}:
+        return jsonify({'error': 'Invalid role selected'}), 400
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -100,8 +141,8 @@ def register():
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         cur.execute(
             """INSERT INTO users (username, email, password_hash, role)
-               VALUES (%s, %s, %s, 'analyst') RETURNING id, username, email, role""",
-            (username, email, password_hash)
+               VALUES (%s, %s, %s, %s) RETURNING id, username, email, role""",
+            (username, email, password_hash, requested_role)
         )
         user = cur.fetchone()
         conn.commit()
@@ -186,6 +227,84 @@ def me():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         return jsonify(_serialize_user(user)), 200
+    finally:
+        cur.close()
+        conn.close()
+
+
+@auth_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    identity = get_jwt_identity()
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    email = (data.get('email') or '').strip()
+    current_password = data.get('current_password') or ''
+    new_password = data.get('new_password') or ''
+
+    if not username or not email:
+        return jsonify({'error': 'username and email are required'}), 400
+
+    if new_password and len(new_password) < 6:
+        return jsonify({'error': 'new password must be at least 6 characters'}), 400
+
+    if new_password and not current_password:
+        return jsonify({'error': 'current password is required to change your password'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute("SELECT * FROM users WHERE username = %s", (identity,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        if new_password:
+            if not bcrypt.checkpw(current_password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                return jsonify({'error': 'Current password is incorrect'}), 401
+
+        if username != user['username']:
+            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cur.fetchone():
+                return jsonify({'error': 'Username already exists'}), 409
+
+        if email != user['email']:
+            cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+            if cur.fetchone():
+                return jsonify({'error': 'Email already exists'}), 409
+
+        password_hash = user['password_hash']
+        if new_password:
+            password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        cur.execute(
+            """
+            UPDATE users
+            SET username = %s,
+                email = %s,
+                password_hash = %s
+            WHERE id = %s
+            RETURNING id, username, email, role
+            """,
+            (username, email, password_hash, user['id'])
+        )
+        updated_user = cur.fetchone()
+        conn.commit()
+
+        access_token = create_access_token(identity=updated_user['username'], additional_claims={'role': updated_user['role']})
+        refresh_token = create_refresh_token(identity=updated_user['username'])
+
+        record_audit(updated_user['username'], 'profile_updated', request.headers.get('User-Agent', ''), request.remote_addr)
+
+        return jsonify({
+            'user': _serialize_user(updated_user),
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+        }), 200
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[Auth] profile update failed: {e}")
+        return jsonify({'error': 'Failed to update profile'}), 500
     finally:
         cur.close()
         conn.close()

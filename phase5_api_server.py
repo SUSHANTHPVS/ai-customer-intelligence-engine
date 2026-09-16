@@ -53,7 +53,7 @@ from import_bp import import_bp
 from graphql_bp import graphql_bp
 from insights import insights_bp
 from datasets_bp import datasets_bp, init_datasets_db, get_active_dataset_id
-from ml_bp import ml_bp
+from ml_bp import ml_bp, train_churn_model, analyze_model_drift
 from cohort_bp import cohort_bp
 
 
@@ -1036,70 +1036,147 @@ def get_churn_risk():
 @app.route('/models/metrics', methods=['GET'])
 @jwt_required()
 def get_model_metrics():
-    """Get model performance metrics"""
+    """Get model performance metrics for the active dataset."""
+    dataset_id = get_active_dataset_id(get_jwt_identity())
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT model_metrics FROM datasets WHERE id = %s",
+            (dataset_id,)
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+    metrics = row['model_metrics'] if row and row.get('model_metrics') else {
+        'model_name': 'churn_model',
+        'accuracy': 0.0,
+        'precision': 0.0,
+        'recall': 0.0,
+        'f1_score': 0.0,
+        'trained_at': None,
+        'drift': {'overall_drift': False, 'feature_tests': []},
+        'retraining_scheduled': False,
+    }
+
+    if not row or not row.get('model_metrics'):
+        try:
+            metrics = train_churn_model(dataset_id)
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE datasets SET model_metrics = %s WHERE id = %s", (json.dumps(metrics), dataset_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Model metrics fallback training failed for {dataset_id}: {e}")
+
     return jsonify({
-        'churn_model': {
-            'accuracy': 0.92,
-            'precision': 0.89,
-            'recall': 0.85,
-            'f1_score': 0.87
-        },
-        'revenue_model': {
-            'accuracy': 0.88,
-            'precision': 0.86,
-            'recall': 0.84,
-            'f1_score': 0.85
-        },
-        'engagement_model': {
-            'accuracy': 0.91,
-            'precision': 0.88,
-            'recall': 0.87,
-            'f1_score': 0.87
-        },
-        'segmentation_model': {
-            'accuracy': 0.94,
-            'precision': 0.92,
-            'recall': 0.90,
-            'f1_score': 0.91
-        },
+        'dataset_id': dataset_id,
+        **metrics,
         'timestamp': datetime.now().isoformat()
     }), 200
+
+@app.route('/models/leaderboard', methods=['GET'])
+@jwt_required()
+def get_model_leaderboard():
+    """Return a leaderboard for all trained models and per-model comparison."""
+    dataset_id = get_active_dataset_id(get_jwt_identity())
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT id, name, model_metrics FROM datasets WHERE status = 'ready' ORDER BY created_at DESC"
+        )
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    leaderboard = []
+    for row in rows:
+        metrics = row.get('model_metrics') or {}
+        leaderboard.append({
+            'dataset_id': row['id'],
+            'dataset_name': row['name'],
+            'model_name': metrics.get('model_name', 'churn_model'),
+            'accuracy': metrics.get('accuracy', 0),
+            'precision': metrics.get('precision', 0),
+            'recall': metrics.get('recall', 0),
+            'f1_score': metrics.get('f1_score', 0),
+            'drift_detected': bool(metrics.get('drift', {}).get('overall_drift', False)),
+            'trained_at': metrics.get('trained_at'),
+        })
+
+    leaderboard.sort(key=lambda m: (m['f1_score'], m['precision'], m['recall'], m['accuracy']), reverse=True)
+    return jsonify({
+        'leaderboard': leaderboard,
+        'dataset_id': dataset_id,
+        'timestamp': datetime.now().isoformat(),
+    }), 200
+
+
+@app.route('/models/<model_name>/retrain', methods=['POST'])
+@jwt_required()
+def run_model_retrain(model_name):
+    """Manually retrain a model for the active dataset."""
+    dataset_id = get_active_dataset_id(get_jwt_identity())
+    try:
+        metrics = train_churn_model(dataset_id)
+        if 'error' in metrics:
+            return jsonify(metrics), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE datasets SET model_metrics = %s WHERE id = %s", (json.dumps(metrics), dataset_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'dataset_id': dataset_id,
+            'status': 'retrained',
+            'metrics': metrics,
+            'timestamp': datetime.now().isoformat(),
+        }), 200
+    except Exception as e:
+        logger.error(f"Manual retrain failed for dataset {dataset_id}: {e}")
+        return jsonify({'error': 'Retraining failed'}), 500
+
 
 @app.route('/models/performance', methods=['GET'])
 @jwt_required()
 def get_model_performance():
-    """Get historical model performance trends"""
+    """Get historical model performance trends."""
+    dataset_id = get_active_dataset_id(get_jwt_identity())
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT model_metrics FROM datasets WHERE id = %s",
+            (dataset_id,)
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+    metrics = row['model_metrics'] if row and row.get('model_metrics') else None
+    history = []
+    if metrics:
+        history.append({
+            'date': metrics.get('trained_at') or datetime.now().isoformat(),
+            'accuracy': metrics.get('accuracy', 0),
+            'precision': metrics.get('precision', 0),
+            'recall': metrics.get('recall', 0),
+            'f1_score': metrics.get('f1_score', 0),
+            'drift_detected': bool(metrics.get('drift', {}).get('overall_drift', False)),
+        })
+
     return jsonify({
-        'performance_history': [
-            {
-                'date': (datetime.now() - timedelta(days=30)).isoformat(),
-                'accuracy': 0.90,
-                'precision': 0.87,
-                'recall': 0.83,
-                'f1_score': 0.85
-            },
-            {
-                'date': (datetime.now() - timedelta(days=20)).isoformat(),
-                'accuracy': 0.91,
-                'precision': 0.88,
-                'recall': 0.84,
-                'f1_score': 0.86
-            },
-            {
-                'date': (datetime.now() - timedelta(days=10)).isoformat(),
-                'accuracy': 0.91,
-                'precision': 0.89,
-                'recall': 0.85,
-                'f1_score': 0.87
-            },
-            {
-                'date': datetime.now().isoformat(),
-                'accuracy': 0.92,
-                'precision': 0.89,
-                'recall': 0.85,
-                'f1_score': 0.87
-            }
-        ],
+        'performance_history': history,
         'timestamp': datetime.now().isoformat()
     }), 200
 

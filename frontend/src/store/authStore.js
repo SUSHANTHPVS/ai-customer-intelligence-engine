@@ -54,10 +54,10 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  register: async (username, email, password) => {
+  register: async (username, email, password, role = 'analyst') => {
     set({ authLoading: true, authError: null });
     try {
-      const { data } = await axios.post(`${API_URL}/auth/register`, { username, email, password });
+      const { data } = await axios.post(`${API_URL}/auth/register`, { username, email, password, role });
       localStorage.setItem('auth_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
       localStorage.setItem('auth_user', JSON.stringify(data.user));

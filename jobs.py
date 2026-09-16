@@ -13,7 +13,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from apscheduler.schedulers.background import BackgroundScheduler
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 
 from cache import cache_set, cache_get, cache_delete_pattern
 
@@ -75,6 +75,39 @@ def refresh_risk_snapshot():
         logger.error(f"[Jobs] refresh_risk_snapshot failed: {e}")
 
 
+def _run_scheduled_retraining():
+    """Retrain eligible datasets on a daily cadence and persist refreshed metrics."""
+    try:
+        from ml_bp import train_churn_model
+
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, name, status FROM datasets WHERE status = 'ready'")
+        datasets = cur.fetchall()
+
+        for dataset in datasets:
+            metrics = train_churn_model(dataset['id'])
+            if 'error' in metrics:
+                _record_run('scheduled_retraining', 'skipped', f"{dataset['id']}: {metrics['error']}")
+                continue
+
+            cur2 = conn.cursor()
+            cur2.execute(
+                "UPDATE datasets SET model_metrics = %s WHERE id = %s",
+                (Json(metrics), dataset['id'])
+            )
+            conn.commit()
+            cur2.close()
+            _record_run('scheduled_retraining', 'success', f"{dataset['id']} -> {metrics.get('model_name', 'churn_model')}")
+
+        cur.close()
+        conn.close()
+        logger.info(f"[Jobs] scheduled_retraining completed for {len(datasets)} dataset(s)")
+    except Exception as e:
+        _record_run('scheduled_retraining', 'failed', str(e))
+        logger.error(f"[Jobs] scheduled_retraining failed: {e}")
+
+
 def start_scheduler():
     if scheduler.running:
         return
@@ -86,8 +119,12 @@ def start_scheduler():
         _run_generate_insights, 'interval', minutes=5,
         id='generate_insights', next_run_time=datetime.now()
     )
+    scheduler.add_job(
+        _run_scheduled_retraining, 'interval', hours=24,
+        id='scheduled_retraining', next_run_time=datetime.now()
+    )
     scheduler.start()
-    logger.info("[Jobs] Background scheduler started (refresh_risk_snapshot every 60s, generate_insights every 5m)")
+    logger.info("[Jobs] Background scheduler started (refresh_risk_snapshot every 60s, generate_insights every 5m, scheduled_retraining every 24h)")
 
 
 def _run_generate_insights():
