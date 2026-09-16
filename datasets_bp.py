@@ -11,7 +11,9 @@ uploads can freely reuse the same raw IDs without colliding.
 import csv
 import io
 import logging
+import os
 import secrets
+import tempfile
 import threading
 from datetime import date, datetime
 
@@ -117,6 +119,25 @@ def _read_csv_rows(file_storage):
     return list(csv.DictReader(io.StringIO(text)))
 
 
+def _save_upload(file_storage, dataset_id, field_name):
+    path = os.path.join(tempfile.gettempdir(), f'{dataset_id}_{field_name}.csv')
+    file_storage.save(path)
+    return path
+
+
+def _iter_csv_batches(path, batch_size=1000):
+    with open(path, 'r', encoding='utf-8-sig', newline='') as stream:
+        reader = csv.DictReader(stream)
+        batch = []
+        for row in reader:
+            batch.append(row)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+
 @datasets_bp.route('/upload', methods=['POST'])
 @jwt_required()
 def upload_dataset():
@@ -138,20 +159,21 @@ def upload_dataset():
     if len(customers_rows) > MAX_CUSTOMERS_ROWS:
         return jsonify({'error': f'customers.csv exceeds the {MAX_CUSTOMERS_ROWS:,} row limit'}), 400
 
-    events_rows, transactions_rows, support_rows = [], [], []
+    dataset_id = 'ds_' + secrets.token_hex(6)
+    events_path = None
+    transactions_rows, support_rows = [], []
     try:
         if request.files.get('events') and request.files['events'].filename:
-            events_rows = _read_csv_rows(request.files['events'])
-            if len(events_rows) > MAX_EVENTS_ROWS:
-                return jsonify({'error': f'events.csv exceeds the {MAX_EVENTS_ROWS:,} row limit'}), 400
+            events_path = _save_upload(request.files['events'], dataset_id, 'events')
         if request.files.get('transactions') and request.files['transactions'].filename:
             transactions_rows = _read_csv_rows(request.files['transactions'])
         if request.files.get('support_tickets') and request.files['support_tickets'].filename:
             support_rows = _read_csv_rows(request.files['support_tickets'])
     except UnicodeDecodeError:
+        if events_path:
+            os.unlink(events_path)
         return jsonify({'error': 'All files must be UTF-8 encoded'}), 400
 
-    dataset_id = 'ds_' + secrets.token_hex(6)
     name = (request.form.get('name') or f"Dataset {datetime.now().strftime('%Y-%m-%d %H:%M')}").strip()[:200]
 
     conn = get_db_connection()
@@ -168,7 +190,7 @@ def upload_dataset():
 
     thread = threading.Thread(
         target=_process_dataset,
-        args=(dataset_id, username, customers_rows, events_rows, transactions_rows, support_rows),
+        args=(dataset_id, username, customers_rows, events_path, transactions_rows, support_rows),
         daemon=True
     )
     thread.start()
@@ -207,7 +229,7 @@ def _compute_quality_report(customers_rows):
     }
 
 
-def _process_dataset(dataset_id, username, customers_rows, events_rows, transactions_rows, support_rows):
+def _process_dataset(dataset_id, username, customers_rows, events_path, transactions_rows, support_rows):
     conn = None
     try:
         conn = get_db_connection()
@@ -230,22 +252,25 @@ def _process_dataset(dataset_id, username, customers_rows, events_rows, transact
             ON CONFLICT (customer_id) DO NOTHING
         """, customer_records, page_size=500)
 
-        if events_rows:
-            event_records = [
-                (
-                    _prefixed(dataset_id, row['event_id']), _prefixed(dataset_id, row['customer_id']),
-                    row.get('event_type', ''), row.get('feature', ''), row.get('event_timestamp') or None,
-                    _to_int(row.get('session_duration_seconds')), _to_float(row.get('event_value')),
-                    dataset_id
-                )
-                for row in events_rows
-            ]
-            execute_batch(cur, """
-                INSERT INTO events (event_id, customer_id, event_type, feature, event_timestamp,
-                                     session_duration_seconds, event_value, dataset_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_id) DO NOTHING
-            """, event_records, page_size=1000)
+        events_count = 0
+        if events_path:
+            for event_rows in _iter_csv_batches(events_path):
+                event_records = [
+                    (
+                        _prefixed(dataset_id, row['event_id']), _prefixed(dataset_id, row['customer_id']),
+                        row.get('event_type', ''), row.get('feature', ''), row.get('event_timestamp') or None,
+                        _to_int(row.get('session_duration_seconds')), _to_float(row.get('event_value')),
+                        dataset_id
+                    )
+                    for row in event_rows
+                ]
+                execute_batch(cur, """
+                    INSERT INTO events (event_id, customer_id, event_type, feature, event_timestamp,
+                                         session_duration_seconds, event_value, dataset_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (event_id) DO NOTHING
+                """, event_records, page_size=1000)
+                events_count += len(event_records)
 
         if transactions_rows:
             txn_records = [
@@ -289,7 +314,7 @@ def _process_dataset(dataset_id, username, customers_rows, events_rows, transact
 
         row_counts = {
             'customers': len(customer_records),
-            'events': len(events_rows),
+            'events': events_count,
             'transactions': len(transactions_rows),
             'support_tickets': len(support_rows),
         }
@@ -319,6 +344,11 @@ def _process_dataset(dataset_id, username, customers_rows, events_rows, transact
     finally:
         if conn:
             conn.close()
+        if events_path:
+            try:
+                os.unlink(events_path)
+            except FileNotFoundError:
+                pass
 
 
 def _compute_features(conn, dataset_id):
